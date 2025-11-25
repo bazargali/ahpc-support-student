@@ -1,5 +1,6 @@
 import os
 from functools import wraps
+from threading import Thread  # <--- ЖАҢА КІТАПХАНА
 from werkzeug.utils import secure_filename
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, send_from_directory
 from flask_login import login_user, logout_user, login_required, current_user
@@ -9,7 +10,16 @@ from .models import User, Ticket, Comment, Category
 
 main = Blueprint('main', __name__)
 
-# --- Декоратор: Тек Админдерге кіруге рұқсат ---
+# --- Асинхронды хат жіберу функциясы (ФОНДА) ---
+def send_async_email(app, msg):
+    with app.app_context():
+        try:
+            mail.send(msg)
+            print("Email сәтті жіберілді!")
+        except Exception as e:
+            print(f"Email жіберу қатесі: {e}")
+
+# --- Декоратор: Тек Админдерге ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -19,7 +29,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Басты бет (Дашборд) ---
+# --- Басты бет ---
 @main.route('/')
 @login_required
 def index():
@@ -34,13 +44,12 @@ def index():
             'open_tickets': Ticket.query.filter(Ticket.status.in_(['Новая', 'В работе'])).count()
         }
     elif current_user.role == 'staff':
-        # Сотрудник көреді: Өзіне бекітілген немесе иесіз (жаңа) өтініштерді
         tickets = Ticket.query.filter((Ticket.assignee_id == current_user.id) | (Ticket.assignee_id == None)).order_by(Ticket.created_at.desc()).all()
         stats = {
             'new': Ticket.query.filter_by(status='Новая').count(),
             'assigned_to_me': Ticket.query.filter_by(assignee_id=current_user.id, status='В работе').count()
         }
-    else: # Студент
+    else:
         tickets = Ticket.query.filter_by(creator_id=current_user.id).order_by(Ticket.created_at.desc()).all()
         stats = {
             'total': len(tickets),
@@ -50,7 +59,7 @@ def index():
     
     return render_template('index.html', tickets=tickets, stats=stats)
 
-# --- Кіру (Логин) ---
+# --- Логин ---
 @main.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -70,7 +79,7 @@ def register():
     if request.method == 'POST':
         email = request.form.get('email')
         full_name = request.form.get('full_name')
-        group_number = request.form.get('group_number') # Топты сақтаймыз
+        group_number = request.form.get('group_number')
         password = request.form.get('password')
         
         if User.query.filter_by(email=email).first():
@@ -94,7 +103,7 @@ def logout():
     logout_user()
     return redirect(url_for('main.login'))
 
-# --- Жаңа өтініш құру ---
+# --- Өтініш құру ---
 @main.route('/create_ticket', methods=['GET', 'POST'])
 @login_required
 def create_ticket():
@@ -106,15 +115,12 @@ def create_ticket():
         category_id = request.form.get('category_id')
         
         attachment_filename = None
-        # Файл жүктеу логикасы
         if 'attachment' in request.files:
             file = request.files['attachment']
             if file and file.filename != '':
                 filename = secure_filename(file.filename)
-                # Uploads папкасы жоқ болса құрамыз
                 if not os.path.exists(current_app.config['UPLOAD_FOLDER']):
                     os.makedirs(current_app.config['UPLOAD_FOLDER'])
-                
                 file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
                 attachment_filename = filename
         
@@ -137,15 +143,13 @@ def create_ticket():
 @login_required
 def ticket_detail(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
-    # Қауіпсіздік: Басқа студент басқаның өтінішін көре алмайды
     if current_user.role == 'user' and ticket.creator_id != current_user.id:
         flash('У вас нет доступа к этой заявке.', 'danger')
         return redirect(url_for('main.index'))
-        
     comments = Comment.query.filter_by(ticket_id=ticket.id).order_by(Comment.created_at.asc())
     return render_template('ticket_detail.html', ticket=ticket, comments=comments)
 
-# --- Статусты жаңарту (ЕҢ МАҢЫЗДЫ ЖЕРІ) ---
+# --- Статусты жаңарту (ТҮЗЕТІЛГЕН ЖЕРІ) ---
 @main.route('/ticket/<int:ticket_id>/update', methods=['POST'])
 @login_required
 def update_ticket_status(ticket_id):
@@ -156,37 +160,34 @@ def update_ticket_status(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
     new_status = request.form.get('status')
     
-    # Егер "В работе" деп ауыстырса, осы қызметкерді жауапты қылып бекітеміз
     if new_status == 'В работе' and ticket.status == 'Новая':
         ticket.assignee_id = current_user.id
         
     ticket.status = new_status
     db.session.commit()
     
-    # Хат жіберу (Қауіпсіз try-except блогымен)
+    # --- ЖАҢА ЛОГИКА: Хатты бөлек потокта жібереміз ---
     if new_status in ['В работе', 'Выполнена']:
-        # Егер Render-де пошта бапталмаған болса, қате шығармаймыз
-        if not current_app.config.get('MAIL_SERVER'):
-            flash(f'Статус обновлен (Email не настроен, уведомление не отправлено).', 'info')
+        # Егер Render-де пошта бапталған болса
+        if current_app.config.get('MAIL_SERVER'):
+            msg = Message(
+                f'Статус заявки #{ticket.id} обновлен',
+                recipients=[ticket.creator.email]
+            )
+            msg.body = f"Здравствуйте, {ticket.creator.full_name}!\n\nСтатус вашей заявки «{ticket.title}» был изменен на «{new_status}».\n\nПодробности в личном кабинете."
+            
+            # Хатты фондық режимде жібереміз (Сайт күтпейді)
+            Thread(target=send_async_email, args=(current_app._get_current_object(), msg)).start()
+            
+            flash(f'Статус обновлен. Уведомление отправляется...', 'success')
         else:
-            try:
-                msg = Message(
-                    f'Статус заявки #{ticket.id} обновлен',
-                    recipients=[ticket.creator.email]
-                )
-                msg.body = f"Здравствуйте, {ticket.creator.full_name}!\n\nСтатус вашей заявки «{ticket.title}» был изменен на «{new_status}».\n\nПодробности в личном кабинете."
-                mail.send(msg)
-                flash(f'Статус обновлен. Уведомление отправлено на почту.', 'success')
-            except Exception as e:
-                # Егер Gmail қате берсе, сайт құламайды!
-                print(f"EMAIL ERROR: {e}") 
-                flash(f'Статус обновлен, но письмо отправить не удалось (Ошибка сервера).', 'warning')
+             flash(f'Статус обновлен (Почта не настроена).', 'info')
     else:
         flash(f'Статус заявки обновлен.', 'info')
         
     return redirect(url_for('main.ticket_detail', ticket_id=ticket.id))
 
-# --- Комментарий жазу ---
+# --- Комментарий ---
 @main.route('/ticket/<int:ticket_id>/add_comment', methods=['POST'])
 @login_required
 def add_comment(ticket_id):
@@ -194,7 +195,6 @@ def add_comment(ticket_id):
     if current_user.role == 'user' and ticket.creator_id != current_user.id:
         flash('У вас нет прав.', 'danger')
         return redirect(url_for('main.index'))
-        
     comment_text = request.form.get('comment_text')
     if comment_text:
         new_comment = Comment(text=comment_text, user_id=current_user.id, ticket_id=ticket.id)
@@ -205,7 +205,7 @@ def add_comment(ticket_id):
         flash('Комментарий не может быть пустым.', 'danger')
     return redirect(url_for('main.ticket_detail', ticket_id=ticket.id))
 
-# --- Категорияларды басқару (Админ) ---
+# --- Категориялар (Админ) ---
 @main.route('/admin/categories', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -223,7 +223,6 @@ def admin_categories():
     categories = Category.query.all()
     return render_template('admin_categories.html', categories=categories)
 
-# --- Категорияны өшіру ---
 @main.route('/admin/category/<int:category_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -237,7 +236,6 @@ def delete_category(category_id):
         flash(f'Категория «{category_to_delete.name}» удалена.', 'success')
     return redirect(url_for('main.admin_categories'))
 
-# --- Файлдарды ашу/жүктеу ---
 @main.route('/uploads/<path:filename>')
 def serve_upload(filename):
     upload_folder = os.path.join(current_app.root_path, '..', 'uploads')
