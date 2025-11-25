@@ -1,0 +1,62 @@
+/* app/static/css/custom.css */
+
+/* Стиль для контейнера поля загрузки файла */
+.file-upload-wrapper {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+    width: 100%;
+}
+
+/* Скрываем стандартное поле input type="file" */
+.file-upload-wrapper input[type=file] {
+    font-size: 100px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+}
+
+/* Стиль для нашей "фальшивой" кнопки */
+.file-upload-button {
+    border: 1px solid #ced4da;
+    background-color: #e9ecef;
+    padding: .375rem .75rem;
+    border-radius: .25rem;
+    display: inline-block;
+    cursor: pointer;
+}
+
+/* Стиль для текста, где будет имя файла */
+.file-upload-label {
+    margin-left: 10px;
+    vertical-align: middle;
+    color: #6c757d;
+}
+
+
+/* app/static/css/custom.css */
+
+/* ... (здесь ваши предыдущие стили) ... */
+
+/* Стили для страницы с деталями заявки */
+.ticket-info-card dt { /* dt - это заголовок поля, например "Автор" */
+    font-weight: 500;
+    color: #6c757d; /* Делаем заголовок серым */
+}
+
+.ticket-info-card dd { /* dd - это значение поля, например "Базаргали Едилов" */
+    margin-bottom: 1rem; /* Добавляем отступ снизу */
+}
+
+.ticket-info-card .bi { /* Стили для иконок в блоке информации */
+    margin-right: 8px;
+    color: #6c757d;
+}
+
+.comment-card { /* Карточка для каждого комментария */
+    border: 1px solid #e9ecef;
+    border-radius: .5rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+}

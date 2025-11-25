@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Заявка #{{ ticket.id }}{% endblock %}
+{% block content %}
+
+<div class="row">
+    <div class="col-lg-8">
+
+        <div class="card shadow-sm border-0 ticket-info-card">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center p-3">
+                <h3 class="mb-0">Заявка #{{ ticket.id }}</h3>
+                <span class="badge fs-6 rounded-pill {% if ticket.status == 'Новая' %}bg-primary{% elif ticket.status == 'В работе' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ ticket.status }}</span>
+            </div>
+            <div class="card-body p-4">
+                <h4 class="card-title">{{ ticket.title }}</h4>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <dl>
+                            <dt><i class="bi bi-person-fill"></i> Студент</dt>
+                            <dd>{{ ticket.creator.full_name }} 
+                                {% if ticket.creator.group_number %}({{ ticket.creator.group_number }}){% endif %}
+                            </dd>
+
+                            <dt><i class="bi bi-geo-alt-fill"></i> Контакты / Место</dt>
+                            <dd>{{ ticket.location }}</dd>
+                            
+                            {% if ticket.assignee %}
+                                <dt><i class="bi bi-person-check-fill"></i> Ответственный</dt>
+                                <dd>{{ ticket.assignee.full_name }}</dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl>
+                            {% if ticket.category %}
+                                <dt><i class="bi bi-tag-fill"></i> Категория</dt>
+                                <dd><span class="badge bg-info text-dark">{{ ticket.category.name }}</span></dd>
+                            {% endif %}
+                            
+                            <dt><i class="bi bi-clock-fill"></i> Создана</dt>
+                            <dd>{{ ticket.created_at | to_local_time }}</dd>
+
+                            {% if ticket.attachment_filename %}
+                                <dt><i class="bi bi-paperclip"></i> Вложение</dt>
+                                <dd><a href="{{ url_for('main.serve_upload', filename=ticket.attachment_filename) }}" target="_blank">Скачать файл</a></dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                </div>
+                <hr>
+                <dl>
+                    <dt><i class="bi bi-file-text-fill"></i> Описание проблемы</dt>
+                    <dd class="mt-2">{{ ticket.description | nl2br }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {# --- ЧАТ (КОММЕНТАРИИ) --- #}
+        <div class="card mt-4 shadow-sm border-0">
+            <div class="card-header bg-light p-3">
+                <h4 class="mb-0"><i class="bi bi-chat-dots-fill me-2"></i>Обсуждение</h4>
+            </div>
+            <div class="card-body p-4">
+                {% for comment in comments %}
+                    <div class="d-flex mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; font-size: 1.2rem;">{{ comment.author.full_name[0] }}</div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1 fw-bold">{{ comment.author.full_name }}</h6>
+                                <small class="text-muted">{{ comment.created_at | to_local_time }}</small>
+                            </div>
+                            <p class="mb-0">{{ comment.text | nl2br }}</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Комментариев пока нет.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mt-4 shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('main.add_comment', ticket_id=ticket.id) }}">
+                    <div class="mb-3">
+                        <textarea class="form-control" name="comment_text" rows="3" placeholder="Написать ответ..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Отправить</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    {# --- УПРАВЛЕНИЕ СТАТУСОМ (ТОЛЬКО STAFF/ADMIN) --- #}
+    <div class="col-lg-4">
+        {% if current_user.role in ['staff', 'admin'] %}
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light p-3">
+                    <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Управление</h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('main.update_ticket_status', ticket_id=ticket.id) }}">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Изменить статус</label>
+                            <select class="form-select" name="status">
+                                <option value="Новая" {% if ticket.status == 'Новая' %}selected{% endif %}>Новая</option>
+                                <option value="В работе" {% if ticket.status == 'В работе' %}selected{% endif %}>В работе</option>
+                                <option value="Выполнена" {% if ticket.status == 'Выполнена' %}selected{% endif %}>Выполнена</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Сохранить</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<a href="{{ url_for('main.index') }}" class="btn btn-link mt-3"><i class="bi bi-arrow-left"></i> Назад к списку</a>
+
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Новая заявка{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="card-title text-center mb-2">Создание заявки</h2>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Тема обращения</label>
+                        <input type="text" class="form-control" id="title" name="title" placeholder="Пример: Справка для военкомата" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="location" class="form-label">Ваши контакты или кабинет</label>
+                        <input type="text" class="form-control" id="location" name="location" placeholder="+7 777 ... или № общежития" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="category_id" class="form-label">Категория</label>
+                        <select class="form-select" id="category_id" name="category_id">
+                            <option value="">Выберите категорию...</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Подробное описание</label>
+                        <textarea class="form-control" id="description" name="description" rows="5" required></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Прикрепить файл (Скриншот / Документ)</label>
+                        <input type="file" class="form-control" id="attachment" name="attachment">
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-primary">Отправить заявку</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

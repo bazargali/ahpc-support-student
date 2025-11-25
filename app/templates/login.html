@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Вход в систему{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="row d-flex justify-content-center align-items-center login-container">
+    <div class="col-md-6 col-lg-5">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-4 p-md-5">
+          <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Логотип Колледжа" height="60">
+          </div>
+          <h2 class="text-center mb-4">Вход в систему</h2>
+          <form method="POST" action="{{ url_for('main.login') }}">
+              <div class="mb-3">
+                  <label for="email" class="form-label">Email</label>
+                  <input type="email" class="form-control" id="email" name="email" required>
+              </div>
+              <div class="mb-3">
+                  <label for="password" class="form-label">Пароль</label>
+                  <input type="password" class="form-control" id="password" name="password" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100 btn-lg mt-3">Войти</button>
+          </form>
+          <p class="text-center mt-4">
+            Нет аккаунта? <a href="{{ url_for('main.register') }}">Зарегистрируйтесь</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script>document.body.classList.add('login-page');</script>
+{% endblock %}

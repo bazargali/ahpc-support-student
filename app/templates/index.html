@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Панель управления{% endblock %}
+
+{% block content %}
+
+{# --- АДМИН ПАНЕЛЬ --- #}
+{% if current_user.role == 'admin' %}
+    <h1 class="mb-4">Панель администратора</h1>
+    <div class="row mb-4">
+        <div class="col-lg-4 mb-3">
+            <div class="card text-white bg-dark text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-ticket-detailed"></i> Всего заявок</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.total_tickets }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card text-white bg-danger text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Открытые заявки</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.open_tickets }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card text-white bg-info text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-people-fill"></i> Пользователи</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.total_users }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <h2>Все заявки в системе</h2>
+
+{# --- СОТРУДНИК (STAFF) ПАНЕЛЬ --- #}
+{% elif current_user.role == 'staff' %}
+    <h1 class="mb-4">Кабинет сотрудника</h1>
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card text-white bg-primary text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-bell-fill"></i> Новые заявки</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.new }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card text-white bg-warning text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-tools"></i> Назначено на меня</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.assigned_to_me }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <h2>Доступные заявки</h2>
+
+{# --- СТУДЕНТ ПАНЕЛЬ --- #}
+{% else %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Мои заявки</h1>
+        <a href="{{ url_for('main.create_ticket') }}" class="btn btn-success btn-lg">
+            <i class="bi bi-plus-circle"></i> Создать заявку
+        </a>
+    </div>
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-journal-text"></i> Всего</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.total }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card text-white bg-warning text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-hourglass-split"></i> В работе</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.active }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card text-white bg-success text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-check2-circle"></i> Решено</h5>
+                    <p class="card-text fs-1 fw-bold">{{ stats.completed }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <h3>История заявок</h3>
+{% endif %}
+
+<div class="ticket-list">
+{% for ticket in tickets %}
+    <div class="card mb-3 shadow-sm ticket-card">
+        <div class="card-header d-flex justify-content-between">
+            <h5 class="mb-0">
+                <a href="{{ url_for('main.ticket_detail', ticket_id=ticket.id) }}" class="text-decoration-none text-dark stretched-link">
+                    #{{ ticket.id }} - {{ ticket.title }}
+                </a>
+            </h5>
+            <span class="badge {% if ticket.status == 'Новая' %}bg-primary{% elif ticket.status == 'В работе' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                {{ ticket.status }}
+            </span>
+        </div>
+        <div class="card-body text-muted small">
+            <div class="row">
+                <div class="col-sm-4"><i class="bi bi-person-fill"></i> <b>От кого:</b> {{ ticket.creator.full_name }}</div>
+                {% if ticket.category %}<div class="col-sm-4"><i class="bi bi-tags-fill"></i> <b>Категория:</b> {{ ticket.category.name }}</div>{% endif %}
+                <div class="col-sm-4"><i class="bi bi-clock-fill"></i> <b>Дата:</b> {{ ticket.created_at.strftime('%d.%m.%Y') }}</div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <p>Заявок пока нет.</p>
+{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+/* app/static/css/style.css */
+
+/* Фон для страниц входа и регистрации */
+body.login-page {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.login-container {
+  min-height: 80vh;
+}
+
+/* Эффект при наведении на карточку заявки */
+.ticket-card {
+    transition: all 0.2s ease-in-out;
+}
+.ticket-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+.ticket-card a.stretched-link:hover {
+    text-decoration: none;
+    color: var(--bs-primary) !important;
+}
