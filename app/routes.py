@@ -9,6 +9,7 @@ from .models import User, Ticket, Comment, Category
 
 main = Blueprint('main', __name__)
 
+# --- Декоратор для доступа только Админам ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -18,10 +19,13 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# --- Главная страница (Дашборд) ---
 @main.route('/')
 @login_required
 def index():
     stats = {}
+    tickets = []
+    
     if current_user.role == 'admin':
         tickets = Ticket.query.order_by(Ticket.created_at.desc()).all()
         stats = {
@@ -29,21 +33,24 @@ def index():
             'total_users': User.query.count(),
             'open_tickets': Ticket.query.filter(Ticket.status.in_(['Новая', 'В работе'])).count()
         }
-    elif current_user.role == 'staff': # Бывший engineer
+    elif current_user.role == 'staff':
+        # Сотрудник видит свои заявки или ничейные
         tickets = Ticket.query.filter((Ticket.assignee_id == current_user.id) | (Ticket.assignee_id == None)).order_by(Ticket.created_at.desc()).all()
         stats = {
             'new': Ticket.query.filter_by(status='Новая').count(),
             'assigned_to_me': Ticket.query.filter_by(assignee_id=current_user.id, status='В работе').count()
         }
-    else: # 'user' (Студент)
+    else: # Студент
         tickets = Ticket.query.filter_by(creator_id=current_user.id).order_by(Ticket.created_at.desc()).all()
         stats = {
             'total': len(tickets),
             'active': len([t for t in tickets if t.status in ['Новая', 'В работе']]),
             'completed': len([t for t in tickets if t.status == 'Выполнена'])
         }
+    
     return render_template('index.html', tickets=tickets, stats=stats)
 
+# --- Авторизация ---
 @main.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -57,12 +64,13 @@ def login():
             flash('Неверный email или пароль.', 'danger')
     return render_template('login.html')
 
+# --- Регистрация ---
 @main.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         email = request.form.get('email')
         full_name = request.form.get('full_name')
-        group_number = request.form.get('group_number') # Группа студента
+        group_number = request.form.get('group_number') # Сохраняем группу
         password = request.form.get('password')
         
         if User.query.filter_by(email=email).first():
@@ -79,12 +87,14 @@ def register():
         return redirect(url_for('main.index'))
     return render_template('register.html')
 
+# --- Выход ---
 @main.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('main.login'))
 
+# --- Создание заявки ---
 @main.route('/create_ticket', methods=['GET', 'POST'])
 @login_required
 def create_ticket():
@@ -92,18 +102,28 @@ def create_ticket():
     if request.method == 'POST':
         title = request.form.get('title')
         description = request.form.get('description')
-        location = request.form.get('location') # Контакты или кабинет
+        location = request.form.get('location')
         category_id = request.form.get('category_id')
+        
         attachment_filename = None
+        # Загрузка файла
         if 'attachment' in request.files:
             file = request.files['attachment']
             if file and file.filename != '':
-                attachment_filename = secure_filename(file.filename)
-                file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], attachment_filename))
+                filename = secure_filename(file.filename)
+                # Создаем папку uploads, если её нет
+                if not os.path.exists(current_app.config['UPLOAD_FOLDER']):
+                    os.makedirs(current_app.config['UPLOAD_FOLDER'])
+                
+                file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                attachment_filename = filename
         
         new_ticket = Ticket(
-            title=title, description=description, location=location, 
-            creator_id=current_user.id, category_id=category_id if category_id else None, 
+            title=title, 
+            description=description, 
+            location=location, 
+            creator_id=current_user.id, 
+            category_id=category_id if category_id else None, 
             attachment_filename=attachment_filename
         )
         db.session.add(new_ticket)
@@ -112,20 +132,23 @@ def create_ticket():
         return redirect(url_for('main.index'))
     return render_template('create_ticket.html', categories=categories)
 
+# --- Просмотр заявки ---
 @main.route('/ticket/<int:ticket_id>')
 @login_required
 def ticket_detail(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
+    # Проверка доступа (автор, стафф или админ)
     if current_user.role == 'user' and ticket.creator_id != current_user.id:
         flash('У вас нет доступа к этой заявке.', 'danger')
         return redirect(url_for('main.index'))
+        
     comments = Comment.query.filter_by(ticket_id=ticket.id).order_by(Comment.created_at.asc())
     return render_template('ticket_detail.html', ticket=ticket, comments=comments)
 
+# --- Обновление статуса (ЗДЕСЬ БЫЛА ОШИБКА, ТЕПЕРЬ ИСПРАВЛЕНО) ---
 @main.route('/ticket/<int:ticket_id>/update', methods=['POST'])
 @login_required
 def update_ticket_status(ticket_id):
-    # Только admin и staff могут менять статус
     if current_user.role not in ['staff', 'admin']: 
         flash('У вас нет прав для этого действия.', 'danger')
         return redirect(url_for('main.index'))
@@ -133,13 +156,14 @@ def update_ticket_status(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
     new_status = request.form.get('status')
     
+    # Если взяли в работу, назначаем текущего сотрудника
     if new_status == 'В работе' and ticket.status == 'Новая':
         ticket.assignee_id = current_user.id
         
     ticket.status = new_status
     db.session.commit()
     
-    # Отправка уведомления на Email
+    # Отправка уведомления с защитой от ошибок (Try-Except)
     if new_status in ['В работе', 'Выполнена']:
         try:
             msg = Message(
@@ -148,14 +172,17 @@ def update_ticket_status(ticket_id):
             )
             msg.body = f"Здравствуйте, {ticket.creator.full_name}!\n\nСтатус вашей заявки «{ticket.title}» был изменен на «{new_status}».\n\nПодробности в личном кабинете."
             mail.send(msg)
-            flash(f'Статус обновлен. Уведомление отправлено.', 'success')
+            flash(f'Статус обновлен. Уведомление отправлено на почту.', 'success')
         except Exception as e:
-            flash(f'Статус обновлен, но не удалось отправить email: {e}', 'warning')
+            # Если почта не настроена или ошибка сети — сайт НЕ упадет
+            print(f"ОШИБКА ОТПРАВКИ ПОЧТЫ: {e}") 
+            flash(f'Статус обновлен, но письмо отправить не удалось (ошибка сервера).', 'warning')
     else:
         flash(f'Статус заявки обновлен.', 'info')
         
     return redirect(url_for('main.ticket_detail', ticket_id=ticket.id))
 
+# --- Добавление комментария ---
 @main.route('/ticket/<int:ticket_id>/add_comment', methods=['POST'])
 @login_required
 def add_comment(ticket_id):
@@ -163,6 +190,7 @@ def add_comment(ticket_id):
     if current_user.role == 'user' and ticket.creator_id != current_user.id:
         flash('У вас нет прав.', 'danger')
         return redirect(url_for('main.index'))
+        
     comment_text = request.form.get('comment_text')
     if comment_text:
         new_comment = Comment(text=comment_text, user_id=current_user.id, ticket_id=ticket.id)
@@ -173,6 +201,7 @@ def add_comment(ticket_id):
         flash('Комментарий не может быть пустым.', 'danger')
     return redirect(url_for('main.ticket_detail', ticket_id=ticket.id))
 
+# --- Управление категориями (Админ) ---
 @main.route('/admin/categories', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -190,6 +219,7 @@ def admin_categories():
     categories = Category.query.all()
     return render_template('admin_categories.html', categories=categories)
 
+# --- Удаление категории ---
 @main.route('/admin/category/<int:category_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -203,6 +233,7 @@ def delete_category(category_id):
         flash(f'Категория «{category_to_delete.name}» удалена.', 'success')
     return redirect(url_for('main.admin_categories'))
 
+# --- Скачивание файлов ---
 @main.route('/uploads/<path:filename>')
 def serve_upload(filename):
     upload_folder = os.path.join(current_app.root_path, '..', 'uploads')
