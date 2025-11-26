@@ -15,8 +15,10 @@ class User(UserMixin, db.Model):
     # --- ЖАҢА ӨРІС: Студенттің тобы ---
     group_number = db.Column(db.String(20), nullable=True) 
     
-    password_hash = db.Column(db.String(255))  # <--- 255-ке ауыстырыңыз
-    # Рөлдер: 'user' (студент), 'staff' (қызметкер), 'admin'
+    # 🔥 ДҰРЫС ТҮРІ: TEXT (кез келген ұзын хеш сақталады)
+    password_hash = db.Column(db.Text, nullable=False)
+
+    # Рөлдер: 'user', 'staff', 'admin'
     role = db.Column(db.String(10), nullable=False, default='user')
     
     created_tickets = db.relationship('Ticket', foreign_keys='Ticket.creator_id', backref='creator', lazy=True)
@@ -33,7 +35,7 @@ class Ticket(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    location = db.Column(db.String(50)) # Мұны "Кабинет" немесе "Байланыс телефоны" деп қолдануға болады
+    location = db.Column(db.String(50))
     status = db.Column(db.String(20), nullable=False, default='Новая')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
