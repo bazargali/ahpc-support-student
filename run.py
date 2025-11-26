@@ -4,9 +4,9 @@ from app.models import User, Category
 app = create_app()
 
 with app.app_context():
-    # db.drop_all()  <--- ЭТУ СТРОКУ МЫ УДАЛИЛИ ИЛИ ЗАКОММЕНТИРОВАЛИ
+  
     
-    # Создаем таблицы, только если их нет
+   
     db.create_all()
 
     # 1. Проверяем и создаем Админа
