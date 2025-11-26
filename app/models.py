@@ -15,7 +15,7 @@ class User(UserMixin, db.Model):
     # --- ЖАҢА ӨРІС: Студенттің тобы ---
     group_number = db.Column(db.String(20), nullable=True) 
     
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(255))  # <--- 255-ке ауыстырыңыз
     # Рөлдер: 'user' (студент), 'staff' (қызметкер), 'admin'
     role = db.Column(db.String(10), nullable=False, default='user')
     
